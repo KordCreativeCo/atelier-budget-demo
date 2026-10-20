@@ -3578,6 +3578,23 @@ html body main .todayrow>.hero .herowhen b{color:#0d0d0d!important;font-weight:8
 html body main .todayrow>.hero .rolldone{border-top:0!important;padding-top:0!important;margin-top:10px!important;font-size:14px!important}
 html body main .todayrow>.hero details.how>summary{text-transform:none!important;letter-spacing:0!important;font-size:14px!important;font-weight:500!important}
 html body main .todayrow>.hero .herochips .ghostchip{border:0!important;background:transparent!important;box-shadow:none!important;text-decoration:underline;text-underline-offset:4px;padding:0 8px!important;color:#3a3530!important}
+/* Right now on a phone: one top row (number, label, ?), then the sentence and the actions at full width */
+@media (max-width:560px){
+  html body #main .onething.note{display:grid!important;grid-template-columns:auto minmax(0,1fr)!important;column-gap:12px!important;row-gap:10px!important;padding:20px 18px!important;align-items:center!important}
+  html body #main .onething.note>div:not(.nact){display:contents!important;padding:0!important}
+  html body #main .onething.note .ndot{grid-column:1;grid-row:1;align-self:center;margin:0!important}
+  html body #main .onething.note .lab{grid-column:2;grid-row:1;display:flex!important;align-items:center!important;justify-content:space-between;gap:10px!important;flex-wrap:nowrap!important;white-space:normal!important;margin:0!important;min-width:0;font-size:12px!important;letter-spacing:.08em!important;line-height:1.3}
+  html body #main .onething.note .lab .nlabt{min-width:0;flex:1 1 auto}
+  html body #main .onething.note .lab .npips{display:none!important}
+  html body #main .onething.note .lab .q{flex:none;margin:0 0 0 auto!important}
+  html body #main .onething.note .t,html body #main .onething.note .nmore,html body #main .onething.note .helptext,html body #main .onething.note .nact{grid-column:1/-1!important}
+  html body #main .onething.note .t{font-size:22px!important;line-height:1.2!important;margin-top:4px!important;text-wrap:pretty}
+  html body #main .onething.note .nmore{margin-top:0!important}
+  html body #main .onething.note .nact{display:flex!important;flex-wrap:nowrap!important;gap:10px!important;margin-top:6px!important;justify-content:stretch!important;width:100%}
+  html body #main .onething.note .nact .btn{flex:1 1 auto!important;min-width:0;height:48px!important;min-height:48px!important;justify-content:center!important;padding:0 14px!important}
+  html body #main .onething.note .nact .ndismiss{position:static!important;flex:none!important;width:48px!important;height:48px!important;min-height:48px!important;margin:0!important}
+  html body #main .onething.note .nact.two{display:grid!important;grid-template-columns:minmax(0,1fr) minmax(0,1fr) 48px!important}
+}
 /* Bills on a phone: Mark paid fills the row with its label centred; Edit is a quiet 44px link beside it */
 @media (max-width:640px){
   html body #main .brow .bacts{display:flex!important;align-items:center;gap:12px!important;width:100%;margin-top:4px}
@@ -4958,7 +4975,7 @@ function oneThing() {
   // the day's three check-ins, numbered 1, 2, 3 as you go, then a tick once they're all done
   const total = Math.max(did, left), pos = total - left + 1;
   const pips = n => total ? `<span class="npips" aria-hidden="true">${[...Array(total)].map((_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>` : "";
-  const head = `<div class="lab muted">${x ? `Right now · check-in ${pos} of ${total}` : did ? `Today's check-ins · all done` : "Right now"}${pips(x ? pos - 1 : total)}${qBtn("Right now")}</div>`;
+  const head = `<div class="lab muted">${x ? `<span class="nlabt">Right now · check‑in ${pos} of ${total}</span>` : did ? `<span class="nlabt">Today's check‑ins · all done</span>` : "Right now"}${pips(x ? pos - 1 : total)}${qBtn("Right now")}</div>`;
   if (!x) return `<section class="onething note done" role="status" aria-label="Right now"><span class="ndot" aria-hidden="true">✓</span><div>${head}<div class="t">${allThree ? "All three done. The rest can wait." : did ? "Done for today. The rest can wait." : "You're all caught up. Nothing needs you right now."}</div>${helpText("Right now")}</div><div class="nact"><button class="btn ghost" type="button" data-hact="go:plan">See the week ahead</button></div></section>`;
   return `<section class="onething note" role="status" aria-label="Right now"><span class="ndot num" title="Check-in ${pos} of ${total}" aria-label="Check-in ${pos} of ${total}">${pos}</span><div>${head}<div class="t">${esc(x.t)}</div><div class="nmore">About ${esc(x.time)}${left > 1 ? ` · ${left - 1} more after this` : " · the last one today"}</div>${helpText("Right now")}</div>
     <div class="nact${x.alt ? " two" : ""}">${x.alt ? `<button class="btn ghost" type="button" data-act="${esc(x.alt[1])}">${esc(x.alt[0])}</button>` : ""}<button class="btn" type="button" data-act="${esc(x.act)}">${esc(x.btn)}</button><button class="del ndismiss" type="button" data-skip="${esc(x.id)}"${x.rest ? ` data-rest="${x.rest}"` : ""} aria-label="${x.rest ? `Hide this for ${x.rest} days` : "Not today: hide this until tomorrow"}" title="${x.rest ? `Hide for ${x.rest} days` : "Not today"}">✕</button></div></section>`;
