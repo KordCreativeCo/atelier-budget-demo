@@ -4966,7 +4966,10 @@ function thingsToDo() {
 }
 // the one "Next step" banner a page shows: what to do and one button that opens that exact task.
 // When nothing is needed it says so, with a quiet link to the most useful thing to look at.
+// The "Next step" / "All done" banner on Debt, Investments and Buckets was removed (2026-10-21).
+// It now draws nothing; the page's own cards still say what needs doing.
 function nextBar(ns) {
+  return "";
   const done = ns[2] === "done";
   return `<section class="invnext${done ? " isdone" : ""}" aria-label="Your next step"><span class="lab">${done ? "All done" : "Next step"}</span><p>${ns[0]}</p>${ns[1] || ""}</section>`;
 }
