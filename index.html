@@ -3578,6 +3578,12 @@ html body main .todayrow>.hero .herowhen b{color:#0d0d0d!important;font-weight:8
 html body main .todayrow>.hero .rolldone{border-top:0!important;padding-top:0!important;margin-top:10px!important;font-size:14px!important}
 html body main .todayrow>.hero details.how>summary{text-transform:none!important;letter-spacing:0!important;font-size:14px!important;font-weight:500!important}
 html body main .todayrow>.hero .herochips .ghostchip{border:0!important;background:transparent!important;box-shadow:none!important;text-decoration:underline;text-underline-offset:4px;padding:0 8px!important;color:#3a3530!important}
+/* Bills on a phone: Mark paid fills the row with its label centred; Edit is a quiet 44px link beside it */
+@media (max-width:640px){
+  html body #main .brow .bacts{display:flex!important;align-items:center;gap:12px!important;width:100%;margin-top:4px}
+  html body #main .brow .bacts .bpay,html body #main .brow .bacts .pbtn{flex:1 1 auto!important;width:auto!important;height:46px!important;min-height:46px!important;padding:0 16px!important;display:inline-flex!important;align-items:center!important;justify-content:center!important;text-align:center!important;letter-spacing:.14em!important;white-space:nowrap}
+  html body #main .brow .bacts .bedit{flex:none!important;height:46px;min-height:46px!important;padding:0 14px!important;display:inline-flex!important;align-items:center;justify-content:center;text-underline-offset:5px}
+}
 /* Planner calendar on a phone: bills and pay as small marks, spent as a short figure, today as an ink date */
 @media (max-width:640px){
   html body #main .pkey2{grid-template-columns:minmax(0,1fr) minmax(0,1fr)!important;gap:10px 14px!important}
