@@ -2880,6 +2880,8 @@ html body .helptext p{color:inherit}
   html[data-page="dash"] body #main{display:flex!important;flex-direction:column!important;gap:20px!important}
   html[data-page="dash"] body #main>*{margin-top:0!important;margin-bottom:0!important}
   html[data-page="dash"] body #main .todayrow{display:contents!important}
+  /* the example (or demo) note always comes first, so people know the numbers are made up */
+  html[data-page="dash"] body #main>.exbanner{order:-9}
   html[data-page="dash"] body #main .todayrow>.hero{order:-5}
   html[data-page="dash"] body #main>.onething{order:-4}
   html[data-page="dash"] body #main .todayrow>.card{order:-3}
@@ -7741,7 +7743,7 @@ function render() {
   // the strip scrolls sideways on iPad-sized screens: keep the page you're on in view
   { const rail = $("#tabs .tabsrail"), cur = rail?.querySelector('[aria-current="page"]'); if (cur && rail.scrollWidth > rail.clientWidth) rail.scrollLeft = cur.offsetLeft - rail.offsetLeft - (rail.clientWidth - cur.offsetWidth) / 2; }
   let exHidden = false; try { exHidden = sessionStorage.getItem(KEY + ":ex") === "1"; } catch (_) {}
-  const banner = (S.example && !exHidden ? `<div class="banner"><span><b>This is a demo.</b> Every number is made up, so explore freely. Anything you change stays only in this browser.</span><span class="row"><button class="btn ghost" type="button" data-keepex>Keep exploring the example</button><button class="btn dark" id="startFresh" type="button">Use my numbers</button><label class="btn ghost" for="restore">I have a backup</label></span></div>` : "")
+  const banner = (S.example && !exHidden ? `<div class="banner exbanner" role="note"><span><b>This is a demo.</b> Every number is made up, so explore freely. Anything you change stays only in this browser.</span><span class="row"><button class="btn ghost" type="button" data-keepex>Keep exploring the example</button><button class="btn dark" id="startFresh" type="button">Use my numbers</button><label class="btn ghost" for="restore">I have a backup</label></span></div>` : "")
     + (!S.helpSeen ? `<div class="banner"><span><b>Help is on.</b> Tap any <span class="q" aria-hidden="true" style="cursor:default">?</span> to see what a section does, in plain words.</span><button class="btn ghost" type="button" data-helpseen>Got it</button></div>` : "");
   const sy = window.scrollY;
   $("#main").innerHTML = banner + PAGES[view.tab]();
