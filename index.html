@@ -5302,26 +5302,36 @@ function dailyChecks() {
   const todays = [0, 1, 2].map(i => pool[(start + i) % pool.length]), done = (S.daily[TODAY] || {}).chk || [], skip = S.skipped[TODAY] || [];
   return todays.filter(c => !done.includes(c.id) && !skip.includes("chk-" + c.id)).map(c => ({id: "chk-" + c.id, t: c.t, time: "1 min", act: "chk:" + c.id, btn: "Take a look"}));
 }
-// three check-ins a day: the day's three stay, and nothing new is added once they're done
-function dayQueue() {
-  const all = dailyChecks(); let seen = [];
-  const nk = S.example ? "hb-checks-ex" : "hb-checks";
-  try { const o = JSON.parse(localStorage.getItem(nk) || "{}"); if (o.d === TODAY && Array.isArray(o.ids)) seen = o.ids; } catch (e) {}
-  const q = all.filter(x => seen.includes(x.id) || (seen.length < 3 && seen.push(x.id)));
-  try { localStorage.setItem(nk, JSON.stringify({d: TODAY, ids: seen})); } catch (e) {}
-  return q;
+// Right now is only for what matters most (2026-10-23): pay to confirm, bills that are late, due today or soon,
+// an out-of-date balance, a growing debt, and pay that isn't split yet. Most urgent first, never more than three.
+// Each one leaves by itself once it's dealt with; ✕ hides it until tomorrow.
+function criticalChecks() {
+  const out = [], skip = S.skipped[TODAY] || [], pc = payChecks();
+  for (const p of pc.landed) out.push({id: "pay-" + p.key, t: `Did your ${p.x.name} pay land? It was due ${payLabel(p.d)}.`, time: "10 sec", act: "paygot:" + p.key, btn: "Record it"});
+  const bills = billItems().items.filter(x => !x.paid && x.l.group !== "Savings");
+  for (const x of bills.filter(x => x.d < TODAY)) out.push({id: "late-" + x.key, t: `${x.l.name} (${money(x.amt)}) was due ${payLabel(x.d)}. Is it paid?`, time: "10 sec", act: "billpaid:" + x.key, btn: "Yes, it's paid", alt: ["See bills", "bills"]});
+  for (const x of bills.filter(x => x.d === TODAY || x.d === addDays(TODAY, 1))) out.push({id: "due-" + x.key, t: `${x.l.name} (${money(x.amt)}) is due ${x.d === TODAY ? "today" : "tomorrow"}.`, time: "10 sec", act: "billpaid:" + x.key, btn: "I've paid it", alt: ["See bills", "bills"]});
+  const age = S.balanceDate ? daysBetween(S.balanceDate, TODAY) : null;
+  if (age !== null && age >= 4) out.push({id: "bal", t: `Your bank balance is ${age} days old. Update it so today's number stays right.`, time: "1 min", act: "balance", btn: "Update it"});
+  const grow = (S.debts || []).find(d => num(d.balance) > 0 && dStatus(d).k === "grow");
+  if (grow) out.push({id: "debt-" + grow.id, t: `${grow.name} is growing, because the payment is less than the interest.`, time: "2 min", act: "debtfix", btn: "Show me"});
+  const sp = (typeof paysToSplit === "function" ? paysToSplit() : [])[0];
+  if (sp) out.push({id: "split-" + sp.key, t: `${money(num(sp.t.amount))} landed and isn't split into your buckets yet.`, time: "10 sec", act: "splitquick:" + sp.key, btn: "Split it the usual way", alt: ["Choose amounts", "split:" + sp.key]});
+  const R = S.ready || {};
+  for (const x of bills.filter(x => x.d > addDays(TODAY, 1) && x.d <= addDays(TODAY, 3) && !R[x.key])) out.push({id: "soon-" + x.key, t: `${x.l.name} (${money(x.amt)}) is due ${payLabel(x.d)}. Is the money ready?`, time: "10 sec", act: "ready:" + x.key, btn: "Yes, it's ready", alt: ["See bills", "bills"]});
+  return out.filter(x => !skip.includes(x.id));
 }
+function dayQueue() { return criticalChecks().slice(0, 3); }
 function oneThing() {
   const q = dayQueue(), x = q[0];
   const left = q.length, d = S.daily[TODAY] || {};
-  let did = 0; try { const o = JSON.parse(localStorage.getItem(S.example ? "hb-checks-ex" : "hb-checks") || "{}"); if (o.d === TODAY) did = (o.ids || []).length; } catch (e) {}
-  const allThree = did >= 3 || (dailyOn("bal") && dailyOn("log") && d.under);
+  const did = 0, allThree = false;
   // the day's three check-ins, numbered 1, 2, 3 as you go, then a tick once they're all done
   const total = Math.max(did, left), pos = total - left + 1;
   const pips = n => total ? `<span class="npips" aria-hidden="true">${[...Array(total)].map((_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>` : "";
-  const head = `<div class="lab muted">${x ? `<span class="nlabt">Right now · check‑in ${pos} of ${total}</span>` : did ? `<span class="nlabt">Today's check‑ins · all done</span>` : "Right now"}${pips(x ? pos - 1 : total)}${qBtn("Right now")}</div>`;
-  if (!x) return `<section class="onething note done" role="status" aria-label="Right now"><span class="ndot" aria-hidden="true">✓</span><div>${head}<div class="t">${allThree ? "All three done. The rest can wait." : did ? "Done for today. The rest can wait." : "You're all caught up. Nothing needs you right now."}</div>${helpText("Right now")}</div><div class="nact"><button class="btn ghost" type="button" data-hact="go:plan">See the week ahead</button></div></section>`;
-  return `<section class="onething note" role="status" aria-label="Right now"><span class="ndot num" title="Check-in ${pos} of ${total}" aria-label="Check-in ${pos} of ${total}">${pos}</span><div>${head}<div class="t">${esc(x.t)}</div><div class="nmore">About ${esc(x.time)}${left > 1 ? ` · ${left - 1} more after this` : " · the last one today"}</div>${helpText("Right now")}</div>
+  const head = `<div class="lab muted">${x ? `<span class="nlabt">Right now · ${pos} of ${total}</span>` : did ? `<span class="nlabt">Today's check‑ins · all done</span>` : "Right now"}${pips(x ? pos - 1 : total)}${qBtn("Right now")}</div>`;
+  if (!x) return `<section class="onething note done" role="status" aria-label="Right now"><span class="ndot" aria-hidden="true">✓</span><div>${head}<div class="t">Nothing urgent right now. Your bills and pay are up to date.</div>${helpText("Right now")}</div><div class="nact"><button class="btn ghost" type="button" data-hact="go:plan">See the week ahead</button></div></section>`;
+  return `<section class="onething note" role="status" aria-label="Right now"><span class="ndot num" title="${pos} of ${total}" aria-label="${pos} of ${total} things that need you">${pos}</span><div>${head}<div class="t">${esc(x.t)}</div><div class="nmore">About ${esc(x.time)}${left > 1 ? ` · ${left - 1} more after this` : ""}</div>${helpText("Right now")}</div>
     <div class="nact${x.alt ? " two" : ""}">${x.alt ? `<button class="btn ghost" type="button" data-act="${esc(x.alt[1])}">${esc(x.alt[0])}</button>` : ""}<button class="btn" type="button" data-act="${esc(x.act)}">${esc(x.btn)}</button><button class="del ndismiss" type="button" data-skip="${esc(x.id)}"${x.rest ? ` data-rest="${x.rest}"` : ""} aria-label="${x.rest ? `Hide this for ${x.rest} days` : "Not today: hide this until tomorrow"}" title="${x.rest ? `Hide for ${x.rest} days` : "Not today"}">✕</button></div></section>`;
 }
 /* ---------- Guided setup: six steps in a fixed order, saved as you go ---------- */
@@ -6377,8 +6387,7 @@ const HELP = {
   "Went out": "Bills you ticked paid, plus everything you logged this month.\n\nMoney put into savings isn't spending, so it's not in this total. It has its own row.",
   "Safe to spend today": "What you can spend today and still be okay until payday.\n\n- Splurge: Fun money, like takeaway or a night out. {in}\n- Daily Expenses: Everyday needs, like food and fuel. Bills due before payday are kept back first. {in}\n- Smile: Saving up for bigger treats, like a holiday. {out}\n- Fire Extinguisher: Paying off debt and building your emergency reserve. {out}\n\nUse the switch to see Splurge only, or Daily Expenses + Splurge. The money is shared evenly over the days until payday. Pay counts once it lands.",
   "Bank money in buckets": "When you started using buckets, the money in your bank was shared into them, so every dollar has a job.\n\n- Spending money: Daily Expenses and Splurge. {in}\n- Set aside: Smile and Fire Extinguisher. {out}\n\nChange the amounts any time. They must add up to what you had.",
-  "Right now": "Three quick check-ins a day, to keep you in touch with your money. Each one takes about a minute.\n\n- Take a look: Opens that part of your budget and ticks the check-in off.\n- Not today: Press ✕ to skip one.\n\nThey change each day, so you see a different part of your budget. Urgent things, like pay to confirm or an overdue bill, show on their own pages and in Three small things.",
-  "Three small things": "Three quick ticks that keep your numbers right. Each one comes from your own planner.\n\n1. Check your bank balance is right.\n2. Log anything you spent today.\n3. Try to keep today under your daily amount.\n\nDo one, then tick it. On a quiet day they may already be done.\n\n- Payday after your balance: If pay landed after you typed your balance, it asks How much landed? Your usual amount is filled in. Change it if needed, then press Add.\n- Already on Money in: If you added this pay yourself, it asks if that's the same payday. Yes adds nothing twice.\n- Balance typed on payday: A line asks how much landed and whether it was already in your balance. Yes leaves your number alone. No adds it.\n\nChanged your mind? Undo sits at the bottom until you tap something else. You can also fix it on Money in.",
+  "Right now": "Only the things that matter most today, one at a time, never more than three: pay to confirm, a bill that's late, due today or soon, a bank balance that's out of date, a debt that's growing, or pay that isn't split yet.\n\n- The button: Deals with it right here, like ticking a bill paid.\n- Not today: Press \u2715 to hide it until tomorrow.\n\nWhen nothing needs you, it says so.",  "Three small things": "Three quick ticks that keep your numbers right. Each one comes from your own planner.\n\n1. Check your bank balance is right.\n2. Log anything you spent today.\n3. Try to keep today under your daily amount.\n\nDo one, then tick it. On a quiet day they may already be done.\n\n- Payday after your balance: If pay landed after you typed your balance, it asks How much landed? Your usual amount is filled in. Change it if needed, then press Add.\n- Already on Money in: If you added this pay yourself, it asks if that's the same payday. Yes adds nothing twice.\n- Balance typed on payday: A line asks how much landed and whether it was already in your balance. Yes leaves your number alone. No adds it.\n\nChanged your mind? Undo sits at the bottom until you tap something else. You can also fix it on Money in.",
   "Brain dump": "A place to park a thought so it stops buzzing around your head. It never touches your numbers.",
   "Welcome back": "Life happens. Three quick updates bring your numbers back up to date. Nothing you did before is lost.",
   "Spending by group": "Everything you plan to spend, grouped into bills, everyday spending, savings and debt repayments. The second figure is what you've actually logged this month.",
