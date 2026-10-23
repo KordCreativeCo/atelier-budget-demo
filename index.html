@@ -4224,7 +4224,8 @@ html body #main .onething.note .ndismiss{width:50px!important;height:50px!import
 html body #main .onething.note .ndismiss:hover{color:#0d0d0d!important;border-color:#0d0d0d!important}
 html body #main .onething.note.done .ndot{background:transparent!important;color:#0d0d0d!important;border:1px solid #0d0d0d!important;font-size:24px!important}
 html body #main .onething.note{position:relative;grid-template-columns:auto minmax(0,1fr)!important;row-gap:20px!important;padding-right:84px!important}
-html body #main .onething.note .nact{grid-column:2;justify-content:flex-start!important;flex-wrap:wrap!important}
+html body #main .onething.note .nact{grid-column:2;justify-content:flex-end!important;flex-wrap:wrap!important}
+@media (min-width:900px){html body #main .onething.note{grid-template-columns:auto minmax(0,1fr) auto!important}html body #main .onething.note .nact{grid-column:3!important;grid-row:1!important;align-self:center!important;flex-wrap:nowrap!important}}
 html body #main .onething.note .ndismiss{position:absolute;top:22px;right:22px;width:44px!important;height:44px!important}
 html body #main .onething.note.done .nact{grid-column:auto}
 html body #main .onething.note.done{grid-template-columns:auto minmax(0,1fr) auto!important;padding-right:30px!important}
@@ -5217,7 +5218,7 @@ function hero() {
     <p class="stalewhy">The balance we have is from <b>${esc(dayLabel(S.balanceDate || TODAY))}</b>, more than a week ago. A number built on it could be wrong, so we won't guess.</p>
     <div class="row"><button type="button" class="btn" data-act="balance">Update my balance</button></div></section>`;
   // a day under your Splurge share is a win: offer one tap to move it to Smile, once, and only when it's worth it
-  const y = p.yesterday, rs = rollSet(), yActive = y && (S.tx.some(t => t.date === y.d) || Object.keys(S.daily[y.d] || {}).length > 0), nudge = y && yActive && y.leftover >= amt(10) && !y.decided;
+  const y = p.yesterday, rs = rollSet(), yActive = y && (S.tx.some(t => t.date === y.d) || Object.keys(S.daily[y.d] || {}).some(k => k !== "rnSeen")), nudge = y && yActive && y.leftover >= amt(10) && !y.decided;
   const yline = !y || !yActive || !(y.allow > 0) || !(y.leftover > 0) ? "" : nudge ? `<div class="rollask" role="group" aria-label="Yesterday's leftover">
       <div class="rahead"><span class="ralab">Yesterday</span><span class="raspent">${money(y.used, true)} of ${money(y.allow, true)} spent</span></div>
       <p class="raleft">Nice, you kept <b class="num">${money(y.leftover, true)}</b> of your Splurge. Move it to ${esc(bkName(rs.to))}?</p>
@@ -5358,12 +5359,14 @@ function criticalChecks() {
 function dayQueue() { return criticalChecks().slice(0, 3); }
 function oneThing() {
   const q = dayQueue(), x = q[0];
-  const left = q.length, d = S.daily[TODAY] || {};
-  const did = 0, allThree = false;
-  // the day's three check-ins, numbered 1, 2, 3 as you go, then a tick once they're all done
-  const total = Math.max(did, left), pos = total - left + 1;
+  const left = q.length;
+  // remember what showed today, so the count moves on (1 of 2, then 2 of 2) as each one is dealt with
+  const d = S.daily[TODAY] || (S.daily[TODAY] = {}), seen = d.rnSeen || (d.rnSeen = []);
+  q.forEach(i => { if (!seen.includes(i.id)) seen.push(i.id); });
+  const did = seen.filter(id => !q.some(i => i.id === id)).length;
+  const total = did + left, pos = did + 1;
   const pips = n => total ? `<span class="npips" aria-hidden="true">${[...Array(total)].map((_, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</span>` : "";
-  const head = `<div class="lab muted">${x ? `<span class="nlabt">Right now · ${pos} of ${total}</span>` : did ? `<span class="nlabt">Today's check‑ins · all done</span>` : "Right now"}${pips(x ? pos - 1 : total)}${qBtn("Right now")}</div>`;
+  const head = `<div class="lab muted">${x ? `<span class="nlabt">Right now · ${pos} of ${total}</span>` : did ? `<span class="nlabt">Right now · all done</span>` : "Right now"}${pips(x ? pos - 1 : total)}${qBtn("Right now")}</div>`;
   if (!x) return `<section class="onething note done" role="status" aria-label="Right now"><span class="ndot" aria-hidden="true">✓</span><div>${head}<div class="t">Nothing urgent right now. Your bills and pay are up to date.</div>${helpText("Right now")}</div><div class="nact"><button class="btn ghost" type="button" data-hact="go:plan">See the week ahead</button></div></section>`;
   return `<section class="onething note" role="status" aria-label="Right now"><span class="ndot num" title="${pos} of ${total}" aria-label="${pos} of ${total} things that need you">${pos}</span><div>${head}${x.h ? `<div class="t nhead"><span class="nh">${esc(x.h)}</span>${x.amt ? `<span class="nam num">${money(x.amt)}</span>` : ""}</div><div class="nwhen${x.urgent ? " urgent" : ""}">${esc(x.when || "")}</div>` : `<div class="t">${esc(x.t)}</div>`}<div class="nmore">About ${esc(x.time)}${left > 1 ? ` · ${left - 1} more after this` : ""}</div>${helpText("Right now")}</div>
     <div class="nact${x.alt ? " two" : ""}">${x.alt ? `<button class="btn ghost" type="button" data-act="${esc(x.alt[1])}">${esc(x.alt[0])}</button>` : ""}<button class="btn" type="button" data-act="${esc(x.act)}">${esc(x.btn)}</button><button class="del ndismiss" type="button" data-skip="${esc(x.id)}"${x.rest ? ` data-rest="${x.rest}"` : ""} aria-label="${x.rest ? `Hide this for ${x.rest} days` : "Not today: hide this until tomorrow"}" title="${x.rest ? `Hide for ${x.rest} days` : "Not today"}">✕</button></div></section>`;
