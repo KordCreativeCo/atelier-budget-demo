@@ -4758,12 +4758,14 @@ function payoff(d) {
   return {months: n, interest, path};
 }
 
-// all debts together, month by month; extra goes to the highest-rate debt still owing
+// all debts together, month by month; extra goes to the highest-rate debt still owing.
+// When a debt is paid off, its payment keeps going: it moves on to the debts still owing (2026-10-23, from the usability audit),
+// and so does whatever is left over from a last payment that's smaller than usual.
 function debtSim(extra) {
   const ds = S.debts.filter(d => num(d.balance) > 0).map(d => ({b: num(d.balance), r: num(d.rate) / 100 / 12, p: num(d.payment)})).sort((a, b) => b.r - a.r);
   const path = [ds.reduce((a, d) => a + d.b, 0)]; let n = 0, interest = 0;
   while (path[n] > 0.005 && n < 600) { let x = num(extra);
-    for (const d of ds) { if (d.b <= 0) continue; const i = d.b * d.r; interest += i; d.b = Math.max(0, d.b + i - d.p); }
+    for (const d of ds) { if (d.b <= 0) { x += d.p; continue; } const i = d.b * d.r; interest += i; const owe = d.b + i; if (d.p >= owe) { x += d.p - owe; d.b = 0; } else d.b = owe - d.p; }
     for (const d of ds) { if (!x) break; if (d.b <= 0) continue; const t = Math.min(x, d.b); d.b -= t; x -= t; }
     n++; path.push(ds.reduce((a, d) => a + d.b, 0)); }
   return {months: n, interest, path};
@@ -5968,12 +5970,18 @@ const MILES = [
   ["inv-monthly", "Adding to investments every month", () => (S.inv || []).some(h => num(h.monthly) > 0)],
   ["inv-checks", "Six monthly check-ins", () => Object.keys(S.invHistory || {}).length >= 6],
   ["debt-listed", "All your debts in one place", () => (S.debts || []).length > 0],
-  ["debt-shrinking", "Every debt shrinking", () => (S.debts || []).length > 0 && S.debts.every(d => dStatus(d).k !== "grow")],
+  ["debt-shrinking", "Every debt shrinking", () => (S.debts || []).length > 0 && S.debts.every(d => dStatus(d).k !== "grow") && S.debts.reduce((a, d) => a + num(d.balance), 0) < S.debts.reduce((a, d) => a + Math.max(num(d.start ?? d.balance), num(d.balance)), 0) - 0.5],
   ["debt-quarter", "A quarter of your debt paid off", () => { const t0 = (S.debts || []).reduce((a, d) => a + Math.max(num(d.start ?? d.balance), num(d.balance)), 0), t = (S.debts || []).reduce((a, d) => a + num(d.balance), 0); return t0 > 0 && (t0 - t) / t0 >= .25; }],
 ];
+// Badges are for real progress (2026-10-23, from the usability audit). An amount you already had the first time a badge was checked
+// is "where you started", not a win; the badge is earned when you cross it later (and if you drop back below, you can cross it again).
+const MS_GROW = new Set(["m-1k", "m-2500", "inv-10k", "nwpos", "plan-left"]);
 function checkMiles() {
-  const fresh = [];
-  for (const [id, name, f] of MILES) if (!S.milestones[id]) { let ok = false; try { ok = f(); } catch (e) {} if (ok) { S.milestones[id] = TODAY; fresh.push(name); } }
+  const fresh = []; S.msSeen = S.msSeen || {}; S.msStart = S.msStart || {};
+  for (const [id, name, f] of MILES) if (!S.milestones[id]) { let ok = false; try { ok = f(); } catch (e) {}
+    if (MS_GROW.has(id) && !S.example) { if (!S.msSeen[id]) { S.msSeen[id] = TODAY; if (ok) { S.msStart[id] = TODAY; continue; } }
+      else if (S.msStart[id]) { if (!ok) delete S.msStart[id]; continue; } }
+    if (ok) { S.milestones[id] = TODAY; fresh.push(name); } }
   if (fresh.length) { save(); if (!S.example) setTimeout(() => toast("Milestone reached: " + msText(fresh[0]), false), 400); }
 }
 // Milestones: the count and a tally first, then your latest wins and the next few to aim for. Everything else waits behind "See all".
@@ -5982,7 +5990,7 @@ function milesCard() {
   const seal = ok => `<span class="mseal${ok ? " on" : ""}" aria-hidden="true">${ok ? '<svg viewBox="0 0 16 16" width="12" height="12"><path d="M3.5 8.4l2.9 2.9 6-6.3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="square"/></svg>' : ""}</span>`;
   const got = MILES.filter(x => S.milestones[x[0]]).sort((x, y) => S.milestones[y[0]].localeCompare(S.milestones[x[0]])), todo = MILES.filter(x => !S.milestones[x[0]]);
   const n = got.length, all = !!view.milesAll, row = ([id, name]) => { const d = S.milestones[id];
-    return `<li class="${d ? "ok" : ""}">${seal(!!d)}<span class="nm">${nmOf(name)}</span><span class="mwhen">${d ? esc(dayLabel(d)) : "not yet"}</span></li>`; };
+    return `<li class="${d ? "ok" : ""}">${seal(!!d)}<span class="nm">${nmOf(name)}</span><span class="mwhen">${d ? esc(dayLabel(d)) : (S.msStart || {})[id] ? "where you started" : "not yet"}</span></li>`; };
   const shownGot = all ? got : got.slice(0, 3), shownTodo = all ? todo : todo.slice(0, 3);
   const tally = `<div class="mtally" role="img" aria-label="${n} of ${MILES.length} milestones reached">${MILES.map((x, i) => `<i class="${i < n ? "on" : ""}"></i>`).join("")}</div>`;
   const head = `<div class="mhead"><p class="mcount"><b class="num">${n}</b><span>of ${MILES.length} reached</span></p><p class="mnote">${n ? "Once reached, they stay reached." : "Your first one is close. Log a spend to start."}</p></div>${tally}`;
@@ -7363,7 +7371,7 @@ function pDebt() {
       <text x="${X(0)}" y="${H - 16}" text-anchor="start">Now</text>
       ${sim.months <= n ? `<text x="${X(sim.months) + (sim.months > n * .8 ? 6 : 0)}" y="${H - 16}" text-anchor="${sim.months > n * .8 ? "end" : "middle"}" class="dpend">Debt-free · ${esc(when(sim.months))}</text>` : ""}</svg></div>`;
     const steps = [0, 50, 100, 250, 500].map(amt), ownX = !steps.includes(ex), ownD = dy > 0 && dy !== 1 && dy !== 5;
-    path = card2("Your path to <i>debt-free</i>", "Balance month by month", "Everything you owe, falling month by month. Try an extra amount to see how the date moves.", "",
+    path = card2("Your path to <i>debt-free</i>", "Balance month by month", "Everything you owe, falling month by month. When one debt is paid off, its payment carries on to the others. Try an extra amount to see how the date moves.", "",
       `<div class="dpctl"><div class="pick"><span class="lab muted">Pay extra each month</span><div class="pickrow"><div class="seg" role="group" aria-label="Pay extra each month">${steps.map(v => `<button type="button" data-dextra="${v}" aria-pressed="${ex === v}">${v ? "+" + money(v) : "No extra"}</button>`).join("")}</div>
       <label class="ownval${ownX ? " on" : ""}"><span>Your own</span><span aria-hidden="true">${esc(S.currency || "$")}</span><input type="number" min="0" max="${amt(100000)}" step="${amt(10)}" inputmode="numeric" value="${ownX ? ex : ""}" placeholder="${amt(150)}" data-set="dpExtra" aria-label="Your own extra amount each month"><span>a month</span></label></div></div>
       <div class="pick"><span class="lab muted">Show</span><div class="pickrow"><div class="seg" role="group" aria-label="How much of the timeline to show">${[[1, "Next year"], [5, "5 years"], [0, "All the way"]].map(([k, l]) => `<button type="button" data-dspan="${k}" aria-pressed="${(dy > 0 ? dy : 0) === k}">${l}</button>`).join("")}</div>
